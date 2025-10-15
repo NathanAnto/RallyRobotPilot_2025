@@ -1,5 +1,3 @@
-
-
 if __name__ == "__main__":
     import numpy
     import pickle
@@ -9,6 +7,6 @@ if __name__ == "__main__":
     with lzma.open("record_0.npz", "rb") as file:
         data = pickle.load(file)
 
-        print("Read", len(data), "snapshotwas")
+        print("Read", len(data), "snapshots")
         print(data[0].image)
-        print([e.current_controls for e in data])
+        print([e for e in data])
