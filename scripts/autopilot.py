@@ -6,17 +6,20 @@ from data_collector import DataCollectionUI
 from neural_network import NeuralNetwork
 
 class NNMsgProcessor:
-    def __init__(self, model_path=None):
-        # Set up device
+    def __init__(self):
         self.device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
         
-        # Load the trained model
-        self.model = NeuralNetwork().to(self.device)
-        if model_path:
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-        self.model.eval()  # Set to evaluation mode
-
-        # Track current state of controls to avoid sending duplicates
+        # Load both models
+        self.race_model = NeuralNetwork().to(self.device)
+        self.safe_model = NeuralNetwork().to(self.device)
+        
+        self.race_model.load_state_dict(torch.load("scripts/fast_model.pth", map_location=self.device))
+        self.safe_model.load_state_dict(torch.load("scripts/slow_model.pth", map_location=self.device))
+        
+        self.race_model.eval()
+        self.safe_model.eval()
+        
+        # Initialize current_state (this was missing)
         self.current_state = {
             "forward": False,
             "back": False,
@@ -24,6 +27,17 @@ class NNMsgProcessor:
             "right": False
         }
         
+    def should_use_safe_mode(self, message):
+        # Strategy 1: Distance-based switching
+        min_distance = min(message.raycast_distances)
+        # return min_distance < 30  # Switch to safe mode if obstacles are within 30 units
+        
+        # Strategy 2: Speed-based switching
+        return message.car_speed > 25 # Switch to safe mode at high speeds
+        
+        # Strategy 3: Hybrid approach
+        # return message.car_speed > 25 or min_distance < 10
+
     def nn_infer(self, message):
         """
         Use the neural network to predict control commands from sensor data.
@@ -39,11 +53,14 @@ class NNMsgProcessor:
         features_array = np.array([features], dtype=np.float32)  # Add batch dimension
         features_tensor = torch.from_numpy(features_array).to(self.device)
         
+        active_model = self.safe_model if self.should_use_safe_mode(message) else self.race_model
+
         # Run inference
         with torch.no_grad():
-            outputs = self.model(features_tensor)  # Shape: [1, 4]
+            outputs = active_model(features_tensor)  # Shape: [1, 4]
             predictions = (outputs >= 0.5).cpu().numpy()[0]  # Convert to binary and remove batch dim
         
+
         # Convert predictions to control dictionary
         # Assuming order is: [forward, backward, left, right]
         return {
@@ -60,6 +77,7 @@ class NNMsgProcessor:
         # Only send commands when state changes
         for command, desired in desired_state.items():
             if self.current_state[command] != desired:
+                print("Changing controls")
                 data_collector.onCarControlled(command, desired)
                 self.current_state[command] = desired
 
@@ -72,8 +90,7 @@ if  __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
 
     # Load your trained model (update this path to where you save your model)
-    model_path = "scripts/trained_model.pth"  # Update this path!
-    nn_brain = NNMsgProcessor(model_path)
+    nn_brain = NNMsgProcessor()
     data_window = DataCollectionUI(nn_brain.process_message)
     data_window.show()
 
