@@ -11,11 +11,11 @@ class NNMsgProcessor:
         
         # Load both models
         self.car_model = NeuralNetwork().to(self.device)
-        
-        self.car_model.load_state_dict(torch.load("scripts/car_model.pth", map_location=self.device))
-        
+        self.car_model.load_state_dict(torch.load("scripts/car_model_checkpoint.pth", map_location=self.device))
         self.car_model.eval()
-        
+
+        self.optimal_thresholds = torch.tensor([0.6800, 0.5800, 0.4800, 0.4700], dtype=torch.float32).to(self.device)
+
         # Initialize current_state (this was missing)
         self.current_state = {
             "forward": False,
@@ -38,10 +38,11 @@ class NNMsgProcessor:
         # Convert to numpy array and then to torch tensor
         features_array = np.array([features], dtype=np.float32)  # Add batch dimension
         features_tensor = torch.from_numpy(features_array).to(self.device)
-        
+
         # Run inference
         with torch.no_grad():
-            outputs = self.car_model(features_tensor)  # Shape: [1, 4]
+            logits = self.car_model(features_tensor) # Get raw logits
+            outputs = torch.sigmoid(logits) # Apply sigmoid to get probabilities
             predictions = (outputs >= 0.5).cpu().numpy()[0]  # Convert to binary and remove batch dim
         
 
