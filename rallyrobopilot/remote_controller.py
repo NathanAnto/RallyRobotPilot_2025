@@ -86,7 +86,7 @@ class RemoteController(Entity):
             image = data.reshape(tex.getYSize(), tex.getXSize(), 3)
             image = image[::-1, :, :]#   Image arrives with inverted Y axis
 
-            snapshot.image = image
+            snapshot.image = None
 
             msg_mngr = SensingSnapshotManager()
             data = msg_mngr.pack(snapshot)
